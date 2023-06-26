@@ -1,9 +1,10 @@
 let canvas = document.querySelector("canvas");
 let ctx = canvas.getContext("2d");
 
-let width = 1200;
-let height = 900;
-let dpi = 4;
+let width = window.innerWidth;
+let height = window.innerHeight;
+
+let dpi = 2;
 
 let cellSize = 30;
 let backgroundColor = "white";
@@ -16,6 +17,9 @@ let scale = 1;
 let lastScale = scale;
 let maxScale = 10;
 let minScale = 0.1;
+
+let lastX;
+let lastY;
 
 let zoomPoint = {
   x: 0,
@@ -37,10 +41,13 @@ let doorWidth = 10;
 let rooms = [];
 let tiles = new Set();
 
-stairs = new Room(21, 22, 2, 1, "south", "stairs");
+let numTilesWide = Math.floor(width/(cellSize*scale));
+let numTilesTall = Math.floor(height/(cellSize*scale));
+
+stairs = new Room(numTilesWide/2 - 1, numTilesTall-4, 2, 1, "south", "stairs");
 rooms.push(stairs);
 
-myRoom = new Room(20, 20, 5, 3, "south");
+myRoom = new Room(numTilesWide/2 - 2, numTilesTall - 6, 5, 3, "south");
 rooms.push(myRoom);
 
 resizeCanvas();
@@ -60,6 +67,10 @@ function addEventListeners() {
   canvas.addEventListener("mouseup", (e) => mouseup(e));
   canvas.addEventListener("mousemove", (e) => mousemove(e));
   // canvas.addEventListener("wheel", (e) => wheel(e));
+  canvas.addEventListener("touchstart", (e) => mousedown(e));
+  canvas.addEventListener("touchmove", (e) => mousemove(e));
+  canvas.addEventListener("touchend", (e) => mouseup(e));
+  canvas.addEventListener("touchstart", handleTouchStart);
 }
 
 function calculate() {
@@ -633,8 +644,19 @@ function wheel(e) {
 
 function mousedown(e) {
   pressed = true;
-  mouseX = e.offsetX;
-  mouseY = e.offsetY;
+  let x;
+  let y;
+  if (e.type.startsWith("touch")) {
+      var touch = e.touches[0] || e.changedTouches[0];
+      x = touch.clientX;
+      y = touch.clientY;
+  } else {
+      x = e.offsetX;
+      y = e.offsetY;
+  }
+
+  mouseX = x;
+  mouseY = y;
   update();
 }
 
@@ -643,13 +665,33 @@ function mouseup(e) {
   update();
 }
 
+function handleTouchStart(e) {
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+}
+
 function mousemove(e) {
   if (!pressed) {
     return;
   }
   mouseX = null;
   mouseY = null;
-  move(e.movementX, e.movementY);
+
+  if (e.type.startsWith("touch")) {
+    var touch = e.touches[0];
+    var touchX = touch.clientX;
+    var touchY = touch.clientY;
+    var movementX = touchX - lastX;
+    var movementY = touchY - lastY;
+
+    lastX = touchX;
+    lastY = touchY;
+  } else {
+    movementX = e.movementX;
+    movementY = e.movementY;
+  }
+
+  move(movementX, movementY);
 
   // do not recalculate the distances again, this wil lead to wronrg drawing
   calculateDrawingPositions();
