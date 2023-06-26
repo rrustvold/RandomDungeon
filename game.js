@@ -480,7 +480,7 @@ function Room(x, y, h, w, entrance, type) {
     for (let i in directions) {
       let direction = directions[i];
       if (entrance !== direction) {
-        if (Math.random() * 100 < 50) {
+        if (rooms.length === 1 || Math.random() * 100 < 50) {
           let door_type = "closed_door";
           if (direction === "south") {
             cursor = this.h * (Math.floor(this.w / 2) + this.w % w);
