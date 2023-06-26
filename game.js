@@ -44,10 +44,10 @@ let tiles = new Set();
 let numTilesWide = Math.floor(width/(cellSize*scale));
 let numTilesTall = Math.floor(height/(cellSize*scale));
 
-stairs = new Room(numTilesWide/2 - 1, numTilesTall-4, 2, 1, "south", "stairs");
+stairs = new Room(Math.floor(numTilesWide/2) - 1, numTilesTall-4, 2, 1, "south", "stairs");
 rooms.push(stairs);
 
-myRoom = new Room(numTilesWide/2 - 2, numTilesTall - 6, 5, 3, "south");
+myRoom = new Room(Math.floor(numTilesWide/2) - 2, numTilesTall - 6, 5, 3, "south");
 rooms.push(myRoom);
 
 resizeCanvas();
