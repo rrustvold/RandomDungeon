@@ -44,15 +44,50 @@ let tiles = new Set();
 let numTilesWide = Math.floor(width/(cellSize*scale));
 let numTilesTall = Math.floor(height/(cellSize*scale));
 
-stairs = new Room(Math.floor(numTilesWide/2) - 1, numTilesTall-4, 2, 1, "south", "stairs");
-rooms.push(stairs);
 
-myRoom = new Room(Math.floor(numTilesWide/2) - 2, numTilesTall - 6, 5, 3, "south");
-rooms.push(myRoom);
 
 resizeCanvas();
 addEventListeners();
 calculate();
+if (localStorage.rooms){
+    let rooms_data = JSON.parse(localStorage.getItem("rooms"));
+    for (let i=0; i<rooms_data.length; i++){
+      let this_rooms_tiles = [];
+      for (let j=0; j<rooms_data[i].tiles.length; j++){
+        let tile_data = rooms_data[i].tiles[j];
+        let tile = new Tile(tile_data.x, tile_data.y, tile_data.loc);
+        tile.real = tile_data.real;
+        tile.hash = tile_data.hash;
+        tile.isCont = tile_data.isCont;
+        tile.top = tile_data.top;
+        tile.right = tile_data.right;
+        tile.left = tile_data.left;
+        tile.bottom = tile_data.bottom;
+        tiles.add(tile);
+        this_rooms_tiles.push(tile);
+      }
+      let room = new Room(
+          rooms_data[i].x,
+          rooms_data[i].y,
+          rooms_data[i].h,
+          rooms_data[i].w,
+          rooms_data[i].entrance,
+          rooms_data[i].type,
+          this_rooms_tiles
+      );
+      room.characterIsHere = rooms_data[i].characterIsHere;
+      room.entranceTileLoc = rooms_data[i].entranceTileLoc;
+      room.flip = rooms_data[i].flip;
+
+      rooms.push(room);
+    }
+  } else {
+    stairs = new Room(Math.floor(numTilesWide/2) - 1, numTilesTall-4, 2, 1, "south", "stairs");
+    rooms.push(stairs);
+
+    myRoom = new Room(Math.floor(numTilesWide/2) - 2, numTilesTall - 6, 5, 3, "south");
+    rooms.push(myRoom);
+  }
 draw();
 
 function resizeCanvas() {
@@ -339,18 +374,22 @@ function Tile(x, y, loc) {
   return this;
 }
 
-function Room(x, y, h, w, entrance, type) {
+function Room(x, y, h, w, entrance, type, tiles) {
   this.x = x;
   this.y = y;
   this.h = h;
   this.w = w;
   this.type = type;
+  this.entrance = entrance;
   this.flip = (Math.floor(Math.random()*10) % 2);
   rooms.forEach(room => room.characterIsHere = false);
   this.characterIsHere = true;
   this.entranceTileLoc = 0;
-
-  this.tiles = [];
+  if (tiles === undefined || tiles.length == 0) {
+    this.tiles = [];
+  } else {
+    this.tiles = tiles;
+  }
 
   this.contents = "";
 
@@ -381,27 +420,28 @@ function Room(x, y, h, w, entrance, type) {
   }
 
   // construct all the room's tiles starting in the lower left hand corner and working up then to the right
-  let loc = 0;
-  for (let dx=0; dx<this.w; dx++){
-    for (let dy=0; dy<this.h; dy++){
-      tile = new Tile(this.x + dx, this.y - dy, loc);
-      loc++;
-      if (dx === 0) {
-        tile.left = "wall";
+  if (tiles === undefined || tiles.length == 0) {
+    let loc = 0;
+    for (let dx = 0; dx < this.w; dx++) {
+      for (let dy = 0; dy < this.h; dy++) {
+        tile = new Tile(this.x + dx, this.y - dy, loc);
+        loc++;
+        if (dx === 0) {
+          tile.left = "wall";
+        }
+        if (dx === this.w - 1) {
+          tile.right = "wall";
+        }
+        if (dy === 0) {
+          tile.bottom = "wall";
+        }
+        if (dy === this.h - 1) {
+          tile.top = "wall";
+        }
+        this.tiles.push(tile);
       }
-      if (dx === this.w - 1) {
-        tile.right = "wall";
-      }
-      if (dy === 0) {
-        tile.bottom = "wall";
-      }
-      if (dy === this.h - 1) {
-        tile.top = "wall";
-      }
-      this.tiles.push(tile);
     }
   }
-
   // add the entrance
   let entrance_tile;
   let cursor;
@@ -475,7 +515,7 @@ function Room(x, y, h, w, entrance, type) {
   }
 
   // add random doors
-  if (type !== "stairs") {
+  if (type !== "stairs" && (tiles === undefined || tiles.length == 0)) {
     let directions = ["south", "west", "north", "east"];
     for (let i in directions) {
       let direction = directions[i];
@@ -604,6 +644,17 @@ function draw() {
   rooms.forEach(room => room.draw(ctx));
 
   ctx.restore();
+
+  localStorage.setItem("rooms", JSON.stringify(rooms));
+  ctx.fillStyle = "gray";
+  ctx.fillRect(5, 5, 200, 50);
+  ctx.font = "30px Arial";
+  ctx.fillStyle = "black";
+  ctx.fillText("Reset", 50, 40);
+  if (mouseX > 5 && mouseX < 200 && mouseY >5 && mouseY < 50){
+    localStorage.removeItem("rooms");
+    location.reload();
+  }
 }
 
 function update() {
