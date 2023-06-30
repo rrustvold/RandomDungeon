@@ -14,8 +14,8 @@
       canvas {
         display: block;
         border: 1px solid #000;
-        width: 100vw; /* Set canvas width to full viewport width */
-        height: 100vh; /* Set canvas height to full viewport height */
+        width: 80vw; /* Set canvas width to full viewport width */
+        /*height: 100vh; !* Set canvas height to full viewport height *!*/
       }
     </style>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,7 +58,8 @@
         </div>
         <div class="row">
                     <div class="col">
-                        <h1><button class="btn btn-primary" type="button"
+
+                        <button class="btn btn-primary" type="button"
                                 data-bs-toggle="offcanvas" data-bs-target="#demo">
                             Menu
                         </button>
@@ -66,7 +67,10 @@
                             data-bs-toggle="offcanvas" data-bs-target="#monster-canvas">
                         Monster!
                         </button>
-                        </h1>
+                            <button class="btn btn-primary" type="button" onclick="upOneLevel()">Up a level</button>
+
+                            <button class="btn btn-primary" type="button" onclick="downOneLevel()">Down a level</button>
+                        <p id="levelNum"></p>
                         <p id="status"></p>
 
                     </div>

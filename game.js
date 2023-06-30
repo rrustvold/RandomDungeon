@@ -1,8 +1,8 @@
 let canvas = document.querySelector("canvas");
 let ctx = canvas.getContext("2d");
 
-let width = window.innerWidth;
-let height = window.innerHeight;
+let width = window.innerWidth * .95;
+let height = window.innerHeight * .90;
 
 let dpi = 2;
 
@@ -39,6 +39,7 @@ let mouseX, mouseY;
 let doorWidth = 10;
 
 let rooms = [];
+let currentLevel = 0;
 let tiles = new Set();
 
 let numTilesWide = Math.floor(width/(cellSize*scale));
@@ -49,41 +50,42 @@ addEventListeners();
 calculate();
 if (localStorage.rooms){
     let rooms_data = JSON.parse(localStorage.getItem("rooms"));
-    for (let i=0; i<rooms_data.length; i++){
-      let this_rooms_tiles = [];
-      for (let j=0; j<rooms_data[i].tiles.length; j++){
-        let tile_data = rooms_data[i].tiles[j];
-        let tile = new Tile(tile_data.x, tile_data.y, tile_data.loc);
-        tile.real = tile_data.real;
-        tile.hash = tile_data.hash;
-        tile.isCont = tile_data.isCont;
-        tile.top = tile_data.top;
-        tile.right = tile_data.right;
-        tile.left = tile_data.left;
-        tile.bottom = tile_data.bottom;
-        tiles.add(tile);
-        this_rooms_tiles.push(tile);
-      }
-      let room = new Room(
-          rooms_data[i].x,
-          rooms_data[i].y,
-          rooms_data[i].h,
-          rooms_data[i].w,
-          rooms_data[i].entrance,
-          rooms_data[i].type,
-          this_rooms_tiles
-      );
-      room.characterIsHere = rooms_data[i].characterIsHere;
-      room.entranceTileLoc = rooms_data[i].entranceTileLoc;
-      room.flip = rooms_data[i].flip;
+      for (let i = 0; i < rooms_data.length; i++) {
+        let this_rooms_tiles = [];
+        for (let j = 0; j < rooms_data[i].tiles.length; j++) {
+          let tile_data = rooms_data[i].tiles[j];
+          let tile = new Tile(tile_data.x, tile_data.y, tile_data.z, tile_data.loc);
+          tile.real = tile_data.real;
+          tile.hash = tile_data.hash;
+          tile.isCont = tile_data.isCont;
+          tile.top = tile_data.top;
+          tile.right = tile_data.right;
+          tile.left = tile_data.left;
+          tile.bottom = tile_data.bottom;
+          tiles.add(tile.hash);
+          this_rooms_tiles.push(tile);
+        }
+        let room = new Room(
+            rooms_data[i].x,
+            rooms_data[i].y,
+            rooms_data[i].z,
+            rooms_data[i].h,
+            rooms_data[i].w,
+            rooms_data[i].entrance,
+            rooms_data[i].type,
+            this_rooms_tiles
+        );
+        room.characterIsHere = rooms_data[i].characterIsHere;
+        room.entranceTileLoc = rooms_data[i].entranceTileLoc;
+        room.flip = rooms_data[i].flip;
 
-      rooms.push(room);
-    }
+        rooms.push(room);
+      }
   } else {
-    stairs = new Room(Math.floor(numTilesWide/2) - 1, numTilesTall-4, 2, 1, "south", "stairs");
+    stairs = new Room(Math.floor(numTilesWide/2) - 1, numTilesTall-4, 0,2, 1, "south", "stairs_up");
     rooms.push(stairs);
 
-    myRoom = new Room(Math.floor(numTilesWide/2) - 2, numTilesTall - 6, 5, 3, "south");
+    myRoom = new Room(Math.floor(numTilesWide/2) - 2, numTilesTall - 6, 0, 5, 3, "south");
     rooms.push(myRoom);
   }
 draw();
@@ -131,33 +133,32 @@ function calculateDrawingPositions() {
 }
 
 
-
 function behind_door(){
   let length;
   let width;
   let type;
   let num = Math.random()*100;
-  if (num <= 50) {
+  if (num <= 45) {
     // hallway
     length = Math.floor(Math.random()*10) + 6;
     width = 1;
   }
-  else if (num <= 85) {
+  else if (num <= 80) {
     // room
     length = Math.floor(Math.random()*5) + 1;
     width = Math.floor(Math.random()*5) + 1;
   }
-  else if (num <= 95) {
+  else if (num <= 90) {
     // large room
     length = Math.floor(Math.random()*10) + 5;
     width = Math.floor(Math.random()*10) + 5;
   }
-  // else if (num <= 100) {
-  //   // stairs
-  //   length = 2;
-  //   width = 1;
-  //   type = "stairs";
-  // }
+  else if (num <= 100) {
+    // stairs
+    length = 2;
+    width = 1;
+    type = "stairs";
+  }
   else {
     // trap
     length = 1;
@@ -166,15 +167,16 @@ function behind_door(){
   return [length, width, type];
 }
 
-function Tile(x, y, loc) {
+function Tile(x, y, z, loc) {
   this.x = x;
   this.y = y;
+  this.z = z;
 
   this.left = 0;
   this.top = 0;
   this.right = 0;
   this.bottom = 0;
-  const hash = `${this.x}, ${this.y}`;
+  const hash = `${this.x}, ${this.y}, ${this.z}`;
   this.real = !tiles.has(hash);
   tiles.add(hash);
 
@@ -219,18 +221,44 @@ function Tile(x, y, loc) {
           mouseY >= startY - cellSize*scale
       ){
         this.left = "open_door";
-        if (!tiles.has(`${this.x - 1}, ${this.y}`)) {
+        if (!tiles.has(`${this.x - 1}, ${this.y}, ${this.z}`)) {
           let [nextW, nextH, type] = behind_door();
           rooms.push(
               new Room(
                   this.x - nextW,
                   this.y + Math.floor(nextH / 2),
+                  this.z,
                   nextH,
                   nextW,
                   "east",
                   type
               )
-          )
+          );
+          if (type === "stairs") {
+            rooms.push(
+                new Room(
+                  this.x - nextW,
+                  this.y + Math.floor(nextH / 2),
+                  this.z + 1,
+                  nextH,
+                  nextW,
+                  "east",
+                  "stairs_up"
+              )
+            );
+            rooms.push(
+                new Room(
+                  this.x - nextW - 3,
+                  this.y + Math.floor(nextH / 2) + 1,
+                  this.z + 1,
+                  3,
+                  3,
+                  "east",
+                  "room"
+              )
+            );
+            currentLevel += 1;
+          }
         }
       }
     }
@@ -269,18 +297,44 @@ function Tile(x, y, loc) {
           mouseY >= startY - cellSize*scale
       ){
         this.right = "open_door";
-        if (!tiles.has(`${this.x + 1}, ${this.y}`)) {
+        if (!tiles.has(`${this.x + 1}, ${this.y}, ${this.z}`)) {
           let [nextW, nextH, type] = behind_door();
           rooms.push(
               new Room(
                   this.x + 1,
                   this.y + Math.floor(nextH / 2),
+                  this.z,
                   nextH,
                   nextW,
                   "west",
                   type
               )
-          )
+          );
+          if (type === "stairs") {
+            rooms.push(
+                new Room(
+                  this.x + 1,
+                  this.y,
+                  this.z + 1,
+                  nextH,
+                  nextW,
+                  "west",
+                  "stairs_up"
+              )
+            );
+            rooms.push(
+                new Room(
+                  this.x + 3,
+                  this.y + 1,
+                  this.z + 1,
+                  3,
+                  3,
+                  "west",
+                  "room"
+              )
+            );
+            currentLevel += 1;
+          }
         }
       }
 
@@ -304,18 +358,44 @@ function Tile(x, y, loc) {
           mouseY <= startY + doorWidth
       ){
         this.top = "open_door";
-        if (!tiles.has(`${this.x}, ${this.y - 1}`)) {
+        if (!tiles.has(`${this.x}, ${this.y - 1}, ${this.z}`)) {
           let [nextH, nextW, type] = behind_door();
           rooms.push(
               new Room(
                   this.x - Math.floor(nextW / 2),
                   this.y - 1,
+                  this.z,
                   nextH,
                   nextW,
                   "south",
                   type
               )
-          )
+          );
+          if (type === "stairs") {
+            rooms.push(
+                new Room(
+                  this.x,
+                  this.y - 1,
+                  this.z + 1,
+                  nextH,
+                  nextW,
+                  "south",
+                  "stairs_up"
+              )
+            );
+            rooms.push(
+                new Room(
+                  this.x - 1,
+                  this.y - 1 - 2,
+                  this.z + 1,
+                  3,
+                  3,
+                  "south",
+                  "room"
+              )
+            );
+            currentLevel += 1;
+          }
         }
       }
     }
@@ -351,18 +431,44 @@ function Tile(x, y, loc) {
           mouseY <= startY + doorWidth
       ){
         this.bottom = "open_door";
-        if (!tiles.has(`${this.x}, ${this.y + 1}`)) {
+        if (!tiles.has(`${this.x}, ${this.y + 1}, ${this.z}`)) {
           let [nextH, nextW, type] = behind_door();
           rooms.push(
               new Room(
                   this.x - Math.floor(nextW / 2),
                   this.y + nextH,
+                  this.z,
                   nextH,
                   nextW,
                   "north",
                   type
               )
-          )
+          );
+          if (type === "stairs") {
+            rooms.push(
+                new Room(
+                  this.x,
+                  this.y + 2,
+                  this.z + 1,
+                  nextH,
+                  nextW,
+                  "north",
+                  "stairs_up"
+              )
+            );
+            rooms.push(
+                new Room(
+                  this.x - 1,
+                  this.y + 2 + 3,
+                  this.z + 1,
+                  3,
+                  3,
+                  "north",
+                  "room"
+              )
+            );
+            currentLevel += 1;
+          }
         }
       }
     }
@@ -444,16 +550,19 @@ async function generateMonster(){
     .catch(error => console.error(error));
 }
 
-function Room(x, y, h, w, entrance, type, tiles) {
+function Room(x, y, z, h, w, entrance, type, tiles) {
   this.x = x;
   this.y = y;
+  this.z = z;
   this.h = h;
   this.w = w;
   this.type = type;
   this.entrance = entrance;
   this.flip = (Math.floor(Math.random()*10) % 2);
-  rooms.forEach(room => room.characterIsHere = false);
-  this.characterIsHere = true;
+  if (type !== "stairs" && type !== "stairs_up") {
+    rooms.forEach(room => room.characterIsHere = false);
+    this.characterIsHere = true;
+  }
   this.entranceTileLoc = 0;
   if (tiles === undefined || tiles.length == 0) {
     this.tiles = [];
@@ -500,7 +609,7 @@ function Room(x, y, h, w, entrance, type, tiles) {
     let loc = 0;
     for (let dx = 0; dx < this.w; dx++) {
       for (let dy = 0; dy < this.h; dy++) {
-        tile = new Tile(this.x + dx, this.y - dy, loc);
+        tile = new Tile(this.x + dx, this.y - dy, this.z, loc);
         loc++;
         if (dx === 0) {
           tile.left = "wall";
@@ -591,7 +700,7 @@ function Room(x, y, h, w, entrance, type, tiles) {
   }
 
   // add random doors
-  if (type !== "stairs" && (tiles === undefined || tiles.length == 0)) {
+  if (type !== "stairs" && type !== "stairs_up" && (tiles === undefined || tiles.length == 0)) {
     let directions = ["south", "west", "north", "east"];
     for (let i in directions) {
       let direction = directions[i];
@@ -622,7 +731,7 @@ function Room(x, y, h, w, entrance, type, tiles) {
 
     this.tiles.forEach(tile => tile.draw(ctx));
 
-    if (this.type === "stairs"){
+    if (this.type === "stairs" || this.type === "stairs_up"){
       ctx.beginPath();
       ctx.strokeStyle = "black";
       ctx.lineWidth = 2;
@@ -630,10 +739,12 @@ function Room(x, y, h, w, entrance, type, tiles) {
       if (entrance === "north" || entrance === "south"){
         // stairs are vertical
         if (this.flip) {
+          // base on north side
           ctx.moveTo(this.x * cellSize * scale + right, (this.y - 2) * cellSize * scale + bottom);
           ctx.lineTo((this.x + 0.5) * cellSize * scale + right, (this.y) * cellSize * scale + bottom);
           ctx.lineTo((this.x + 1) * cellSize * scale + right, (this.y - 2) * cellSize * scale + bottom);
         } else {
+          // base on south side
           ctx.moveTo(this.x * cellSize * scale + right, this.y * cellSize * scale + bottom);
           ctx.lineTo((this.x + 0.5) * cellSize * scale + right, (this.y - 2) * cellSize * scale + bottom);
           ctx.lineTo((this.x + 1) * cellSize * scale + right, this.y * cellSize * scale + bottom);
@@ -642,15 +753,18 @@ function Room(x, y, h, w, entrance, type, tiles) {
       } else {
         //stairs are horizontal
         if (this.flip) {
+          // base on west side
           ctx.moveTo(this.x * cellSize * scale + right, this.y * cellSize * scale + bottom);
           ctx.lineTo((this.x + 2) * cellSize * scale + right, (this.y - .5) * cellSize * scale + bottom);
           ctx.lineTo((this.x) * cellSize * scale + right, (this.y - 1) * cellSize * scale + bottom);
         } else {
+          // base on east side
           ctx.moveTo((this.x+2) * cellSize * scale + right, this.y * cellSize * scale + bottom);
           ctx.lineTo((this.x) * cellSize * scale + right, (this.y - .5) * cellSize * scale + bottom);
           ctx.lineTo((this.x+2) * cellSize * scale + right, (this.y - 1) * cellSize * scale + bottom);
         }
       }
+      ctx.closePath();
       ctx.stroke();
     }
 
@@ -717,11 +831,16 @@ function draw() {
 
 
   // Draw the rooms
-  rooms.forEach(room => room.draw(ctx));
+  rooms.forEach(room => {
+    if (room.z === currentLevel) {
+      room.draw(ctx)
+    }
+  });
 
   ctx.restore();
 
   localStorage.setItem("rooms", JSON.stringify(rooms));
+  document.getElementById("levelNum").innerText = `Level ${currentLevel + 1}`;
 }
 
 function reset(){
@@ -818,5 +937,15 @@ function mousemove(e) {
 
   // do not recalculate the distances again, this wil lead to wronrg drawing
   calculateDrawingPositions();
+  update();
+}
+
+function upOneLevel(){
+  currentLevel -= 1;
+  update();
+}
+
+function downOneLevel(){
+  currentLevel += 1;
   update();
 }
