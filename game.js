@@ -44,8 +44,6 @@ let tiles = new Set();
 let numTilesWide = Math.floor(width/(cellSize*scale));
 let numTilesTall = Math.floor(height/(cellSize*scale));
 
-
-
 resizeCanvas();
 addEventListeners();
 calculate();
@@ -374,7 +372,8 @@ function Tile(x, y, loc) {
   return this;
 }
 
-async function generateMonster(level){
+async function generateMonster(){
+  let level = document.getElementById("level").value;
   // CR 1 = 200 xp
   const encounter_difficulty = [
       //easy, medium, difficult, deadly
@@ -393,7 +392,7 @@ async function generateMonster(level){
   } else {
     difficulty = 3;
   }
-  let xp = encounter_difficulty[level][difficulty];
+  let xp = encounter_difficulty[level - 1][difficulty];
 
   let num_monsters = Math.ceil(Math.random() * 2);
   let monster_xp = xp / num_monsters;
@@ -423,7 +422,7 @@ async function generateMonster(level){
         let card = (
             `
               <div>
-                  <h3>${monster.name}</h3>
+                  <h3>${num_monsters} ${monster.name} ${xp} XP</h3>
                   <p><b>${monster.size} ${monster.type} ${monster.alignment}</b></p>
                   <p>AC: ${monster.armor_class[0].value}, HP: ${monster.hit_points}, Speed: ${monster.speed.walk}</p>
                   <p>Str: ${monster.strength}, Dex: ${monster.dexterity}, Con: ${monster.constitution}, Int: ${monster.intelligence}, Wis: ${monster.wisdom}, Cha: ${monster.charisma}</p>
@@ -443,8 +442,6 @@ async function generateMonster(level){
         document.getElementById("monster").innerHTML = card;
       })
     .catch(error => console.error(error));
-
-  return monster;
 }
 
 function Room(x, y, h, w, entrance, type, tiles) {
@@ -467,34 +464,34 @@ function Room(x, y, h, w, entrance, type, tiles) {
   this.contents = "";
 
   // Generate the room's contents
-  let roll = Math.floor(Math.random()*20) + 1;
-  if (this.w > 1 && this.h > 1) {
-    if (roll <= 12) {
-      this.contents = "Empty";
-      generateMonster(2);
-    } else if (roll <= 14) {
-      this.contents = "Monster";
-      generateMonster(2);
+  if (this.characterIsHere) {
+    let roll = Math.floor(Math.random() * 20) + 1;
+    if (this.w > 1 && this.h > 1) {
+      if (roll <= 12) {
+        this.contents = "Empty";
+      } else if (roll <= 14) {
+        this.contents = "Monster";
+        generateMonster();
 
-    } else if (roll <= 17) {
-      this.contents = "Monster & Treasure";
-      generateMonster(2);
+      } else if (roll <= 17) {
+        this.contents = "Monster & Treasure";
+        generateMonster();
 
-    } else if (roll <= 19) {
-      this.contents = "Trick or Trap";
+      } else if (roll <= 19) {
+        this.contents = "Trick or Trap";
+      } else {
+        this.contents = "Treasure!";
+      }
     } else {
-      this.contents = "Treasure!";
-    }
-  } else {
-    // hallway
-    if (roll <= 18) {
-      this.contents = "Empty";
-    }
-    else if (roll <= 19) {
-      this.contents = "Trick or Trap";
-    } else {
-      this.contents = "Wandering Monster";
-      generateMonster(2);
+      // hallway
+      if (roll <= 18) {
+        this.contents = "Empty";
+      } else if (roll <= 19) {
+        this.contents = "Trick or Trap";
+      } else {
+        this.contents = "Wandering Monster";
+        generateMonster();
+      }
     }
   }
 
@@ -668,9 +665,9 @@ function Room(x, y, h, w, entrance, type, tiles) {
           cellSize/2 * scale
       )
 
-      ctx.font = "15px Arial";
-      ctx.fillText(`${5 * (rooms.length - 1)} minutes`, 10, 50)
-      ctx.fillText(this.contents, 10, 100);
+      document.getElementById("status").innerHTML = (`
+        ${5 * (rooms.length - 1)} minutes - ${this.contents}
+      `);
 
     }
 
