@@ -101,7 +101,7 @@ function addEventListeners() {
   canvas.addEventListener("mousedown", (e) => mousedown(e));
   canvas.addEventListener("mouseup", (e) => mouseup(e));
   canvas.addEventListener("mousemove", (e) => mousemove(e));
-  // canvas.addEventListener("wheel", (e) => wheel(e));
+  canvas.addEventListener("wheel", (e) => wheel(e));
   canvas.addEventListener("touchstart", (e) => mousedown(e));
   canvas.addEventListener("touchmove", (e) => mousemove(e));
   canvas.addEventListener("touchend", (e) => mouseup(e));
@@ -374,6 +374,79 @@ function Tile(x, y, loc) {
   return this;
 }
 
+async function generateMonster(level){
+  // CR 1 = 200 xp
+  const encounter_difficulty = [
+      //easy, medium, difficult, deadly
+      [25, 50, 75, 100],
+      [50, 100, 150, 200],
+      [75, 150, 225, 400]
+  ];
+  let roll = Math.floor(Math.random()*100);
+  let difficulty;
+  if (roll < 60){
+    difficulty = 0;
+  } else if (roll < 90) {
+    difficulty = 1;
+  } else if (roll < 97) {
+    difficulty = 2;
+  } else {
+    difficulty = 3;
+  }
+  let xp = encounter_difficulty[level][difficulty];
+
+  let num_monsters = Math.ceil(Math.random() * 2);
+  let monster_xp = xp / num_monsters;
+
+  let monster_cr = monster_xp / 200;
+  if (monster_cr < 0.50){
+    monster_cr = .25;
+  } else if (monster_cr < 1) {
+    monster_cr = .5;
+  } else {
+    monster_cr = Math.floor(monster_cr);
+  }
+
+  let monster_key;
+  await fetch(`https://www.dnd5eapi.co/api/monsters/?challenge_rating=${monster_cr}`)
+    .then(response => response.json())
+    .then(data => {
+      let num_results = data["count"];
+      let random_monster = Math.floor(Math.random() * num_results);
+      monster_key = data["results"][random_monster]["index"];
+    })
+    .catch(error => console.error(error));
+
+  await fetch(`https://www.dnd5eapi.co/api/monsters/${monster_key}`)
+    .then(response => response.json())
+      .then(monster => {
+        let card = (
+            `
+              <div>
+                  <h3>${monster.name}</h3>
+                  <p><b>${monster.size} ${monster.type} ${monster.alignment}</b></p>
+                  <p>AC: ${monster.armor_class[0].value}, HP: ${monster.hit_points}, Speed: ${monster.speed.walk}</p>
+                  <p>Str: ${monster.strength}, Dex: ${monster.dexterity}, Con: ${monster.constitution}, Int: ${monster.intelligence}, Wis: ${monster.wisdom}, Cha: ${monster.charisma}</p>
+                  <p><b>Actions:</b></p>
+            `
+        );
+
+        monster.actions.forEach(action => {
+          card += (`
+              <p><b>${action.name}</b></p>
+              <p>${action.desc}</p>
+              `);
+
+        });
+
+        card += `</div>`;
+        document.getElementById("monster").innerHTML = card;
+      })
+    .catch(error => console.error(error));
+
+  return monster;
+}
+
 function Room(x, y, h, w, entrance, type, tiles) {
   this.x = x;
   this.y = y;
@@ -398,10 +471,15 @@ function Room(x, y, h, w, entrance, type, tiles) {
   if (this.w > 1 && this.h > 1) {
     if (roll <= 12) {
       this.contents = "Empty";
+      generateMonster(2);
     } else if (roll <= 14) {
       this.contents = "Monster";
+      generateMonster(2);
+
     } else if (roll <= 17) {
       this.contents = "Monster & Treasure";
+      generateMonster(2);
+
     } else if (roll <= 19) {
       this.contents = "Trick or Trap";
     } else {
@@ -416,6 +494,7 @@ function Room(x, y, h, w, entrance, type, tiles) {
       this.contents = "Trick or Trap";
     } else {
       this.contents = "Wandering Monster";
+      generateMonster(2);
     }
   }
 
@@ -646,15 +725,11 @@ function draw() {
   ctx.restore();
 
   localStorage.setItem("rooms", JSON.stringify(rooms));
-  ctx.fillStyle = "gray";
-  ctx.fillRect(5, 5, 200, 50);
-  ctx.font = "30px Arial";
-  ctx.fillStyle = "black";
-  ctx.fillText("Reset", 50, 40);
-  if (mouseX > 5 && mouseX < 200 && mouseY >5 && mouseY < 50){
-    localStorage.removeItem("rooms");
-    location.reload();
-  }
+}
+
+function reset(){
+  localStorage.removeItem("rooms");
+  location.reload();
 }
 
 function update() {

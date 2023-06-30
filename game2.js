@@ -44,10 +44,9 @@ let left = 0,
 let tiles = [];
 let tiles_cache = {};
 // Create the starting tile
+let mouseX = 0;
+let mouseY = 0;
 
-let starting_tile = new Tile(4.5,4.5,"city");
-starting_tile.isCharacterHere = true;
-starting_tile.generate_surrounding();
 
 function Tile(x, y, type){
   this.x = x;
@@ -57,13 +56,15 @@ function Tile(x, y, type){
   if (type != null){
     this.type = type;
   } else {
-    this.type = "blue";
+    this.type = "water";
   }
 
   this.x_c = function() {
+    // get the hex center's x coordinate in global frame
     return this.x*x_spacing + right;
   }
   this.y_c = function() {
+    // get the hex center's y coordinate in global frame
     return this.y*y_spacing + bottom;
   }
   this.isCharacterHere = false;
@@ -243,6 +244,22 @@ function Tile(x, y, type){
 }
 
 function init() {
+  if (localStorage.tiles){
+    // let starting_tile = new Tile(4.5,4.5,"city");
+    // starting_tile.isCharacterHere = true;
+    // starting_tile.generate_surrounding();
+    let tile_data = JSON.parse(localStorage.getItem("tiles"));
+    for (let i=0; i<tile_data.length; i++){
+      let tile = new Tile(tile_data[i].x, tile_data[i].y, tile_data[i].type);
+      tile.isCharacterHere = tile_data[i].isCharacterHere;
+      tiles_cache[tile.hash] = tile;
+      tiles.push(tile);
+    }
+  } else {
+    let starting_tile = new Tile(4.5,4.5,"city");
+    starting_tile.isCharacterHere = true;
+    starting_tile.generate_surrounding();
+  }
   draw();
 }
 resizeCanvas();
@@ -338,6 +355,8 @@ function draw() {
   tiles.forEach(tile => tile.draw());
   ctx.fillRect(mouseX, mouseY, 10, 10);
   ctx.restore();
+
+  localStorage.setItem("tiles", JSON.stringify(tiles));
 }
 
 function drawHexagon(x, y, color) {
