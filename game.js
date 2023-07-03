@@ -45,50 +45,361 @@ let tiles = new Set();
 let numTilesWide = Math.floor(width/(cellSize*scale));
 let numTilesTall = Math.floor(height/(cellSize*scale));
 
-resizeCanvas();
-addEventListeners();
-calculate();
-if (localStorage.rooms){
-    let rooms_data = JSON.parse(localStorage.getItem("rooms"));
-      for (let i = 0; i < rooms_data.length; i++) {
-        let this_rooms_tiles = [];
-        for (let j = 0; j < rooms_data[i].tiles.length; j++) {
-          let tile_data = rooms_data[i].tiles[j];
-          let tile = new Tile(tile_data.x, tile_data.y, tile_data.z, tile_data.loc);
-          tile.real = tile_data.real;
-          tile.hash = tile_data.hash;
-          tile.isCont = tile_data.isCont;
-          tile.top = tile_data.top;
-          tile.right = tile_data.right;
-          tile.left = tile_data.left;
-          tile.bottom = tile_data.bottom;
-          tiles.add(tile.hash);
-          this_rooms_tiles.push(tile);
-        }
-        let room = new Room(
-            rooms_data[i].x,
-            rooms_data[i].y,
-            rooms_data[i].z,
-            rooms_data[i].h,
-            rooms_data[i].w,
-            rooms_data[i].entrance,
-            rooms_data[i].type,
-            this_rooms_tiles
-        );
-        room.characterIsHere = rooms_data[i].characterIsHere;
-        room.entranceTileLoc = rooms_data[i].entranceTileLoc;
-        room.flip = rooms_data[i].flip;
+let isOutside = false;
+let hexTiles = [];
+let hexTilesCache = {};
 
-        rooms.push(room);
-      }
+const a = 2 * Math.PI / 6;
+const r = cellSize;
+const r_p = r * Math.cos(Math.PI / 6);
+let x_spacing = 6*r*Math.cos(a);
+let y_spacing = 2*r*Math.sin(a);
+let characterHexPosition = [];
+
+function init() {
+  resizeCanvas();
+  addEventListeners();
+  calculate();
+  load();
+  loadHex();
+  draw();
+}
+
+
+function HexTile(x, y, type){
+  this.x = x;
+  this.y = y;
+  this.hash = `${this.x}, ${this.y}`;
+  this.contents = "";
+  if (type === "red") {
+    this.contents = "city";
   } else {
-    stairs = new Room(Math.floor(numTilesWide/2) - 1, numTilesTall-4, 0,2, 1, "south", "stairs_up");
+    let roll = Math.random() * 100;
+    if (roll < 5){
+      this.contents = "dungeon";
+    }
+  }
+
+  if (type != null){
+    this.type = type;
+  } else {
+    this.type = "water";
+  }
+
+  this.x_c = function() {
+    // get the hex center's x coordinate in global frame
+    return this.x*x_spacing + right;
+  }
+  this.y_c = function() {
+    // get the hex center's y coordinate in global frame
+    return this.y*y_spacing + bottom;
+  }
+  this.isCharacterHere = false;
+
+  hexTilesCache[this.hash] = this;
+  hexTiles.push(this);
+
+  const type_to_color = {
+    grass: "lightGreen",
+    city: "red",
+    water: "blue",
+    hill: "brown",
+    mountain: "gray",
+    desert: "yellow",
+    forest: "green"
+  }
+
+  const type_to_markov = {
+    grass: [.75, .01, .05, .05, .01, .01, .12],
+    city: [.35, .05, .25, .15, .09, .03, .08],
+    water: [.05, .05, .70, .09, .05, .01, .05],
+    hill: [.05, .03, .05, .70, .10, .02, .05],
+    mountain: [.01, .01, .03, .70, .20, .02, .03],
+    desert: [.06, .01, .03, .05, .08, .75, .02],
+    forest: [.05, .01, .03, .05, .10, .01, .75]
+  }
+
+  // generate the tiles around this one
+  this.create_tile_if_dne = function(x, y) {
+    let new_type;
+    if (!(`${x}, ${y}` in hexTilesCache)){
+      let roll = Math.random();
+      let markov = type_to_markov[this.type];
+      let sum = 0;
+      for (let i=0; i < markov.length; i++){
+        sum += markov[i];
+        if (roll <= sum) {
+          new_type = Object.keys(type_to_color)[i];
+          break;
+        }
+      }
+      new HexTile(x, y, new_type);
+    }
+  }
+
+  this.generate_surrounding = function() {
+    //north
+    let x;
+    let y;
+    x = this.x;
+    y = this.y - 1;
+    this.create_tile_if_dne(x,y);
+
+    // north east
+    x = this.x + .5;
+    y = this.y - .5;
+    this.create_tile_if_dne(x,y);
+
+    // south east
+    x = this.x + .5;
+    y = this.y + .5;
+    this.create_tile_if_dne(x,y);
+
+    // south
+    x = this.x;
+    y = this.y + 1;
+    this.create_tile_if_dne(x,y);
+
+    //south west
+    x = this.x - .5;
+    y = this.y + .5;
+    this.create_tile_if_dne(x,y);
+
+    // north west
+    x = this.x - .5;
+    y = this.y - .5;
+    this.create_tile_if_dne(x,y);
+
+  }
+
+  this.draw = function(){
+    drawHexagon(this.x_c(), this.y_c(), type_to_color[this.type]);
+    if (this.isCharacterHere){
+      // draw the player marker
+      ctx.fillStyle = "black";
+      ctx.fillRect(this.x_c() -5, this.y_c()-5, 10, 10);
+
+      // check mouse clicks around this tile
+      let x;
+      let y;
+      if (
+          mouseX >= this.x_c() - r_p &&
+          mouseX <= this.x_c() + r_p &&
+          mouseY <= this.y_c() + 3*r_p &&
+          mouseY >= this.y_c() + r_p
+      ){
+        // tile south
+        console.log("south");
+        x = this.x;
+        y = this.y + 1;
+      }
+      else if (
+          mouseX >= this.x_c() - r_p &&
+          mouseX <= this.x_c() + r_p &&
+          mouseY <= this.y_c() - r_p &&
+          mouseY >= this.y_c() - 3*r_p
+      ) {
+        // north tile
+        console.log("north");
+        x = this.x;
+        y = this.y - 1;
+      }
+      else if (
+          mouseX >= this.x_c() + .5*x_spacing - r_p&&
+          mouseX <= this.x_c() + .5*x_spacing + r_p &&
+          mouseY <= this.y_c() &&
+          mouseY >= this.y_c() - 2*r_p
+      ) {
+        // north east
+        console.log("north east");
+        x = this.x + .5;
+        y = this.y - .5;
+      }
+      else if (
+          mouseX >= this.x_c() + .5*x_spacing - r_p&&
+          mouseX <= this.x_c() + .5*x_spacing + r_p &&
+          mouseY <= this.y_c() + 2*r_p &&
+          mouseY >= this.y_c()
+      ) {
+        // south east
+        x = this.x + .5;
+        y = this.y + .5;
+      }
+      else if (
+          mouseX >= this.x_c() - .5*x_spacing - r_p&&
+          mouseX <= this.x_c() - .5*x_spacing + r_p &&
+          mouseY <= this.y_c() + 2*r_p &&
+          mouseY >= this.y_c()
+      ) {
+        // south west
+        x = this.x - .5;
+        y = this.y + .5;
+      }
+      else if (
+          mouseX >= this.x_c() - .5*x_spacing - r_p&&
+          mouseX <= this.x_c() - .5*x_spacing + r_p &&
+          mouseY <= this.y_c() &&
+          mouseY >= this.y_c() - 2*r_p
+      ) {
+        // north west
+        x = this.x - .5;
+        y = this.y - .5;
+      }
+
+      if (x && y) {
+        let tile;
+        let hash = `${x}, ${y}`;
+        if (!(hash in hexTilesCache)){
+          tile = new HexTile(x, y);
+        } else {
+          tile = hexTilesCache[hash];
+        }
+        tile.isCharacterHere = true;
+        tile.generate_surrounding();
+        this.isCharacterHere = false;
+      }
+
+
+
+    }
+    if (this.contents === "dungeon"){
+      ctx.beginPath();
+      ctx.fillStyle = "black";
+      ctx.fillText("D", this.x_c(), this.y_c());
+    }
+  }
+
+  return this;
+}
+
+function drawHex() {
+  ctx.save();
+  ctx.scale(dpi, dpi);
+
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = lineColor;
+  ctx.translate(-0.5, -0.5);
+
+  let x_pts = [];
+  let y_pts = [];
+  let x_prime_pts = [];
+  let y_prime_pts = [];
+
+  for (let x = right - .5*x_spacing; x > 0; x -= x_spacing) {
+    x_prime_pts.push(x);
+    x_pts.push(x-.5*x_spacing);
+  }
+
+  for (let x = right; x < width; x += x_spacing) {
+    x_pts.push(x);
+    x_prime_pts.push(x+.5*x_spacing);
+  }
+
+  for (let y = bottom - .5*y_spacing; y > 0; y -= y_spacing) {
+    y_prime_pts.push(y);
+    y_pts.push(y - .5*y_spacing);
+  }
+
+  for (let y = bottom; y < height; y += y_spacing) {
+    y_pts.push(y);
+    y_prime_pts.push(y + .5*y_spacing);
+  }
+
+  for (let i=0; i < x_pts.length; i++){
+    for (let j=0; j < y_pts.length; j++){
+      drawHexagon(x_pts[i], y_pts[j]);
+      drawHexagon(x_prime_pts[i], y_prime_pts[j]);
+    }
+  }
+
+  hexTiles.forEach(tile => tile.draw(ctx));
+  ctx.restore();
+
+  localStorage.setItem("tiles", JSON.stringify(hexTiles));
+}
+
+function drawHexagon(x, y, color) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    ctx.lineTo(x + r * Math.cos(a * i), y + r * Math.sin(a * i));
+  }
+  ctx.closePath();
+  ctx.stroke();
+  if (color){
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+}
+
+
+function load(){
+  if (localStorage.rooms) {
+    let rooms_data = JSON.parse(localStorage.getItem("rooms"));
+    for (let i = 0; i < rooms_data.length; i++) {
+      let this_rooms_tiles = [];
+      for (let j = 0; j < rooms_data[i].tiles.length; j++) {
+        let tile_data = rooms_data[i].tiles[j];
+        let tile = new Tile(tile_data.x, tile_data.y, tile_data.z, tile_data.loc);
+        tile.real = tile_data.real;
+        tile.hash = tile_data.hash;
+        tile.isCont = tile_data.isCont;
+        tile.top = tile_data.top;
+        tile.right = tile_data.right;
+        tile.left = tile_data.left;
+        tile.bottom = tile_data.bottom;
+        tiles.add(tile.hash);
+        this_rooms_tiles.push(tile);
+      }
+      let room = new Room(
+          rooms_data[i].x,
+          rooms_data[i].y,
+          rooms_data[i].z,
+          rooms_data[i].h,
+          rooms_data[i].w,
+          rooms_data[i].entrance,
+          rooms_data[i].type,
+          this_rooms_tiles
+      );
+      room.characterIsHere = rooms_data[i].characterIsHere;
+      room.entranceTileLoc = rooms_data[i].entranceTileLoc;
+      room.flip = rooms_data[i].flip;
+
+      rooms.push(room);
+    }
+  } else {
+    let stairs = new Room(Math.floor(numTilesWide / 2) - 1, numTilesTall - 4, 0, 2, 1, "south", "stairs_up");
     rooms.push(stairs);
 
-    myRoom = new Room(Math.floor(numTilesWide/2) - 2, numTilesTall - 6, 0, 5, 3, "south");
+    let myRoom = new Room(Math.floor(numTilesWide / 2) - 2, numTilesTall - 6, 0, 5, 3, "south");
     rooms.push(myRoom);
   }
-draw();
+}
+
+function loadHex(){
+  if (localStorage.tiles){
+    // let starting_tile = new Tile(4.5,4.5,"city");
+    // starting_tile.isCharacterHere = true;
+    // starting_tile.generate_surrounding();
+    let tile_data = JSON.parse(localStorage.getItem("tiles"));
+    for (let i=0; i<tile_data.length; i++){
+      let tile = new HexTile(tile_data[i].x, tile_data[i].y, tile_data[i].type);
+      tile.isCharacterHere = tile_data[i].isCharacterHere;
+      tile.contents = tile_data[i].contents;
+      if (tile.isCharacterHere){
+        characterHexPosition = [tile.x, tile.y];
+      }
+      // hexTilesCache[tile.hash] = tile;
+      // hexTiles.push(tile);
+    }
+  } else {
+    let starting_tile = new HexTile(4.5,4.5,"city");
+    starting_tile.isCharacterHere = true;
+    starting_tile.generate_surrounding();
+  }
+}
 
 function resizeCanvas() {
   canvas.height = height * dpi;
@@ -101,7 +412,7 @@ function addEventListeners() {
   canvas.addEventListener("mousedown", (e) => mousedown(e));
   canvas.addEventListener("mouseup", (e) => mouseup(e));
   canvas.addEventListener("mousemove", (e) => mousemove(e));
-  canvas.addEventListener("wheel", (e) => wheel(e));
+  // canvas.addEventListener("wheel", (e) => wheel(e));
   canvas.addEventListener("touchstart", (e) => mousedown(e));
   canvas.addEventListener("touchmove", (e) => mousemove(e));
   canvas.addEventListener("touchend", (e) => mouseup(e));
@@ -580,11 +891,9 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
         this.contents = "Empty";
       } else if (roll <= 14) {
         this.contents = "Monster";
-        generateMonster();
 
       } else if (roll <= 17) {
         this.contents = "Monster & Treasure";
-        generateMonster();
 
       } else if (roll <= 19) {
         this.contents = "Trick or Trap";
@@ -599,7 +908,6 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
         this.contents = "Trick or Trap";
       } else {
         this.contents = "Wandering Monster";
-        generateMonster();
       }
     }
   }
@@ -609,7 +917,7 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
     let loc = 0;
     for (let dx = 0; dx < this.w; dx++) {
       for (let dy = 0; dy < this.h; dy++) {
-        tile = new Tile(this.x + dx, this.y - dy, this.z, loc);
+        let tile = new Tile(this.x + dx, this.y - dy, this.z, loc);
         loc++;
         if (dx === 0) {
           tile.left = "wall";
@@ -850,7 +1158,11 @@ function reset(){
 
 function update() {
   ctx.clearRect(0, 0, width * dpi, height * dpi);
-  draw();
+  if (isOutside){
+    drawHex();
+  } else {
+    draw();
+  }
 }
 
 function move(dx, dy) {
@@ -944,8 +1256,35 @@ function upOneLevel(){
   currentLevel -= 1;
   update();
 }
+document.getElementById('upOneLevel').addEventListener('click', upOneLevel);
 
 function downOneLevel(){
   currentLevel += 1;
   update();
 }
+document.getElementById('downOneLevel').addEventListener('click', downOneLevel);
+
+function leaveDungeon(){
+  [right, left, _top, bottom] = last_zoom;
+  currentLevel = 0;
+  isOutside = true;
+  update()
+}
+document.getElementById('leaveDungeon').addEventListener('click', leaveDungeon);
+
+let last_zoom = [];
+function enterDungeon(){
+  currentLevel = 0;
+  isOutside = false;
+  last_zoom = [right, left, _top, bottom];
+  right = 0;
+  _top = 0;
+  left = 0
+  bottom = 0;
+  update()
+}
+document.getElementById('enterDungeon').addEventListener('click', enterDungeon);
+
+document.getElementById('monsterButton').addEventListener('click', generateMonster);
+
+init();

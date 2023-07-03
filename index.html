@@ -3,6 +3,7 @@
 
   <head>
     <title>Your Game Title</title>
+      <base href=".">
     <style>
       body,
       html {
@@ -36,13 +37,16 @@
                     <button type="button" class="btn btn-danger" onclick="reset()">Reset Map</button>
                 </p>
                 <p>
-                     <label for="level">Level:</label>
+                     <label for="level">Character Level:</label>
                     <select name="level" id="level">
                       <option value="1">1</option>
                       <option value="2">2</option>
                       <option value="3">3</option>
 <!--                      <option value="4">4</option>-->
                     </select>
+                </p>
+                <p>
+                    <button type="button" class="btn btn-primary" onclick="leaveDungeon()">Leave Dungeon</button>
                 </p>
 
             </div>
@@ -53,8 +57,8 @@
                         data-bs-dismiss="offcanvas"></button>
             </div>
             <div class="offcanvas-body" id="monster">
-
             </div>
+            <button type="button" class="btn btn-primary" id="monsterButton">Random Encounter</button>
         </div>
         <div class="row">
                     <div class="col">
@@ -67,9 +71,11 @@
                             data-bs-toggle="offcanvas" data-bs-target="#monster-canvas">
                         Monster!
                         </button>
-                            <button class="btn btn-primary" type="button" onclick="upOneLevel()">Up a level</button>
+                            <button class="btn btn-primary" type="button" id="upOneLevel">Up a level</button>
 
-                            <button class="btn btn-primary" type="button" onclick="downOneLevel()">Down a level</button>
+                            <button class="btn btn-primary" type="button" id="downOneLevel">Down a level</button>
+                            <button class="btn btn-primary" type="button" id="leaveDungeon">Leave Dungeon</button>
+                        <button class="btn btn-primary" type="button" id="enterDungeon">Enter Dungeon</button>
                         <p id="levelNum"></p>
                         <p id="status"></p>
 
