@@ -38,14 +38,12 @@ let mouseX, mouseY;
 
 let doorWidth = 10;
 
-let rooms = [];
 let currentLevel = 0;
-let tiles = new Set();
 
 let numTilesWide = Math.floor(width/(cellSize*scale));
 let numTilesTall = Math.floor(height/(cellSize*scale));
 
-let isOutside = false;
+let isOutside = true;
 let hexTiles = [];
 let hexTilesCache = {};
 
@@ -55,14 +53,17 @@ const r_p = r * Math.cos(Math.PI / 6);
 let x_spacing = 6*r*Math.cos(a);
 let y_spacing = 2*r*Math.sin(a);
 let characterHexPosition = [];
+let currentHexTile;
+
+let timeInDungeon = 0;
 
 function init() {
   resizeCanvas();
   addEventListeners();
   calculate();
-  load();
+  // load();
   loadHex();
-  draw();
+  drawHex();
 }
 
 
@@ -71,6 +72,10 @@ function HexTile(x, y, type){
   this.y = y;
   this.hash = `${this.x}, ${this.y}`;
   this.contents = "";
+
+  this.rooms = [];
+  this.dungeonTiles = new Set();
+
   if (type === "red") {
     this.contents = "city";
   } else {
@@ -175,6 +180,7 @@ function HexTile(x, y, type){
   this.draw = function(){
     drawHexagon(this.x_c(), this.y_c(), type_to_color[this.type]);
     if (this.isCharacterHere){
+      currentHexTile = this;
       // draw the player marker
       ctx.fillStyle = "black";
       ctx.fillRect(this.x_c() -5, this.y_c()-5, 10, 10);
@@ -383,16 +389,53 @@ function loadHex(){
     // let starting_tile = new Tile(4.5,4.5,"city");
     // starting_tile.isCharacterHere = true;
     // starting_tile.generate_surrounding();
-    let tile_data = JSON.parse(localStorage.getItem("tiles"));
-    for (let i=0; i<tile_data.length; i++){
-      let tile = new HexTile(tile_data[i].x, tile_data[i].y, tile_data[i].type);
-      tile.isCharacterHere = tile_data[i].isCharacterHere;
-      tile.contents = tile_data[i].contents;
-      if (tile.isCharacterHere){
-        characterHexPosition = [tile.x, tile.y];
+    let hex_tile_data = JSON.parse(localStorage.getItem("tiles"));
+    for (let i=0; i<hex_tile_data.length; i++){
+      let hexTile = new HexTile(hex_tile_data[i].x, hex_tile_data[i].y, hex_tile_data[i].type);
+      hexTile.isCharacterHere = hex_tile_data[i].isCharacterHere;
+      hexTile.contents = hex_tile_data[i].contents;
+
+      if (hexTile.contents === "dungeon"){
+        let rooms_data = hex_tile_data[i].rooms;
+
+        for (let j=0; j < rooms_data.length; j++){
+          let this_rooms_tiles = [];
+          for (let k=0; k < rooms_data[j].tiles.length; k++) {
+            let tile_data = rooms_data[j].tiles[k];
+            let tile = new Tile(hexTile, tile_data.x, tile_data.y, tile_data.z, tile_data.loc);
+            tile.real = tile_data.real;
+            tile.hash = tile_data.hash;
+            tile.isCont = tile_data.isCont;
+            tile.top = tile_data.top;
+            tile.right = tile_data.right;
+            tile.left = tile_data.left;
+            tile.bottom = tile_data.bottom;
+            hexTile.dungeonTiles.add(tile.hash);
+            this_rooms_tiles.push(tile);
+          }
+          let room = new Room(
+            hexTile,
+            rooms_data[j].x,
+            rooms_data[j].y,
+            rooms_data[j].z,
+            rooms_data[j].h,
+            rooms_data[j].w,
+            rooms_data[j].entrance,
+            rooms_data[j].type,
+            this_rooms_tiles
+          );
+          room.characterIsHere = rooms_data[j].characterIsHere;
+          room.entranceTileLoc = rooms_data[j].entranceTileLoc;
+          room.flip = rooms_data[j].flip;
+          hexTile.rooms.push(room);
+        }
+
       }
-      // hexTilesCache[tile.hash] = tile;
-      // hexTiles.push(tile);
+
+      if (hexTile.isCharacterHere){
+        characterHexPosition = [hexTile.x, hexTile.y];
+        currentHexTile = hexTile;
+      }
     }
   } else {
     let starting_tile = new HexTile(4.5,4.5,"city");
@@ -478,7 +521,7 @@ function behind_door(){
   return [length, width, type];
 }
 
-function Tile(x, y, z, loc) {
+function Tile(hexTile, x, y, z, loc) {
   this.x = x;
   this.y = y;
   this.z = z;
@@ -488,8 +531,8 @@ function Tile(x, y, z, loc) {
   this.right = 0;
   this.bottom = 0;
   const hash = `${this.x}, ${this.y}, ${this.z}`;
-  this.real = !tiles.has(hash);
-  tiles.add(hash);
+  this.real = !hexTile.dungeonTiles.has(hash);
+  hexTile.dungeonTiles.add(hash);
 
   this.isCont = false;
   this.loc = loc;
@@ -532,10 +575,11 @@ function Tile(x, y, z, loc) {
           mouseY >= startY - cellSize*scale
       ){
         this.left = "open_door";
-        if (!tiles.has(`${this.x - 1}, ${this.y}, ${this.z}`)) {
+        if (!hexTile.dungeonTiles.has(`${this.x - 1}, ${this.y}, ${this.z}`)) {
           let [nextW, nextH, type] = behind_door();
-          rooms.push(
+          hexTile.rooms.push(
               new Room(
+                  hexTile,
                   this.x - nextW,
                   this.y + Math.floor(nextH / 2),
                   this.z,
@@ -546,8 +590,9 @@ function Tile(x, y, z, loc) {
               )
           );
           if (type === "stairs") {
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x - nextW,
                   this.y + Math.floor(nextH / 2),
                   this.z + 1,
@@ -557,8 +602,9 @@ function Tile(x, y, z, loc) {
                   "stairs_up"
               )
             );
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x - nextW - 3,
                   this.y + Math.floor(nextH / 2) + 1,
                   this.z + 1,
@@ -608,10 +654,11 @@ function Tile(x, y, z, loc) {
           mouseY >= startY - cellSize*scale
       ){
         this.right = "open_door";
-        if (!tiles.has(`${this.x + 1}, ${this.y}, ${this.z}`)) {
+        if (!hexTile.dungeonTiles.has(`${this.x + 1}, ${this.y}, ${this.z}`)) {
           let [nextW, nextH, type] = behind_door();
-          rooms.push(
+          hexTile.rooms.push(
               new Room(
+                  hexTile,
                   this.x + 1,
                   this.y + Math.floor(nextH / 2),
                   this.z,
@@ -622,8 +669,9 @@ function Tile(x, y, z, loc) {
               )
           );
           if (type === "stairs") {
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x + 1,
                   this.y,
                   this.z + 1,
@@ -633,8 +681,9 @@ function Tile(x, y, z, loc) {
                   "stairs_up"
               )
             );
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x + 3,
                   this.y + 1,
                   this.z + 1,
@@ -669,10 +718,11 @@ function Tile(x, y, z, loc) {
           mouseY <= startY + doorWidth
       ){
         this.top = "open_door";
-        if (!tiles.has(`${this.x}, ${this.y - 1}, ${this.z}`)) {
+        if (!hexTile.dungeonTiles.has(`${this.x}, ${this.y - 1}, ${this.z}`)) {
           let [nextH, nextW, type] = behind_door();
-          rooms.push(
+          hexTile.rooms.push(
               new Room(
+                  hexTile,
                   this.x - Math.floor(nextW / 2),
                   this.y - 1,
                   this.z,
@@ -683,8 +733,9 @@ function Tile(x, y, z, loc) {
               )
           );
           if (type === "stairs") {
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x,
                   this.y - 1,
                   this.z + 1,
@@ -694,8 +745,9 @@ function Tile(x, y, z, loc) {
                   "stairs_up"
               )
             );
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x - 1,
                   this.y - 1 - 2,
                   this.z + 1,
@@ -742,10 +794,11 @@ function Tile(x, y, z, loc) {
           mouseY <= startY + doorWidth
       ){
         this.bottom = "open_door";
-        if (!tiles.has(`${this.x}, ${this.y + 1}, ${this.z}`)) {
+        if (!hexTile.dungeonTiles.has(`${this.x}, ${this.y + 1}, ${this.z}`)) {
           let [nextH, nextW, type] = behind_door();
-          rooms.push(
+          hexTile.rooms.push(
               new Room(
+                  hexTile,
                   this.x - Math.floor(nextW / 2),
                   this.y + nextH,
                   this.z,
@@ -756,8 +809,9 @@ function Tile(x, y, z, loc) {
               )
           );
           if (type === "stairs") {
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x,
                   this.y + 2,
                   this.z + 1,
@@ -767,8 +821,9 @@ function Tile(x, y, z, loc) {
                   "stairs_up"
               )
             );
-            rooms.push(
+            hexTile.rooms.push(
                 new Room(
+                    hexTile,
                   this.x - 1,
                   this.y + 2 + 3,
                   this.z + 1,
@@ -861,7 +916,7 @@ async function generateMonster(){
     .catch(error => console.error(error));
 }
 
-function Room(x, y, z, h, w, entrance, type, tiles) {
+function Room(hexTile, x, y, z, h, w, entrance, type, tiles) {
   this.x = x;
   this.y = y;
   this.z = z;
@@ -871,7 +926,7 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
   this.entrance = entrance;
   this.flip = (Math.floor(Math.random()*10) % 2);
   if (type !== "stairs" && type !== "stairs_up") {
-    rooms.forEach(room => room.characterIsHere = false);
+    hexTile.rooms.forEach(room => room.characterIsHere = false);
     this.characterIsHere = true;
   }
   this.entranceTileLoc = 0;
@@ -882,6 +937,8 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
   }
 
   this.contents = "";
+
+  timeInDungeon++;
 
   // Generate the room's contents
   if (this.characterIsHere) {
@@ -917,7 +974,7 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
     let loc = 0;
     for (let dx = 0; dx < this.w; dx++) {
       for (let dy = 0; dy < this.h; dy++) {
-        let tile = new Tile(this.x + dx, this.y - dy, this.z, loc);
+        let tile = new Tile(hexTile, this.x + dx, this.y - dy, this.z, loc);
         loc++;
         if (dx === 0) {
           tile.left = "wall";
@@ -1013,7 +1070,7 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
     for (let i in directions) {
       let direction = directions[i];
       if (entrance !== direction) {
-        if (rooms.length === 1 || Math.random() * 100 < 50) {
+        if (hexTile.rooms.length === 1 || Math.random() * 100 < 50) {
           let door_type = "closed_door";
           if (direction === "south") {
             cursor = this.h * (Math.floor(this.w / 2) + this.w % w);
@@ -1088,7 +1145,7 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
       )
 
       document.getElementById("status").innerHTML = (`
-        ${5 * (rooms.length - 1)} minutes - ${this.contents}
+        ${5 * (timeInDungeon)} minutes - ${this.contents}
       `);
 
     }
@@ -1099,7 +1156,7 @@ function Room(x, y, z, h, w, entrance, type, tiles) {
 }
 
 // Draws the grid
-function draw() {
+function draw(hexTile) {
 
   ctx.save();
   ctx.scale(dpi, dpi);
@@ -1139,7 +1196,14 @@ function draw() {
 
 
   // Draw the rooms
-  rooms.forEach(room => {
+  if (hexTile.rooms.length === 0){
+    let stairs = new Room(hexTile, Math.floor(numTilesWide / 2) - 1, numTilesTall - 4, 0, 2, 1, "south", "stairs_up");
+    hexTile.rooms.push(stairs);
+
+    let myRoom = new Room(hexTile, Math.floor(numTilesWide / 2) - 2, numTilesTall - 6, 0, 5, 3, "south");
+    hexTile.rooms.push(myRoom);
+  }
+  hexTile.rooms.forEach(room => {
     if (room.z === currentLevel) {
       room.draw(ctx)
     }
@@ -1147,7 +1211,7 @@ function draw() {
 
   ctx.restore();
 
-  localStorage.setItem("rooms", JSON.stringify(rooms));
+  localStorage.setItem("tiles", JSON.stringify(hexTiles));
   document.getElementById("levelNum").innerText = `Level ${currentLevel + 1}`;
 }
 
@@ -1158,10 +1222,10 @@ function reset(){
 
 function update() {
   ctx.clearRect(0, 0, width * dpi, height * dpi);
-  if (isOutside){
-    drawHex();
+  if (isOutside === false && currentHexTile.contents === "dungeon") {
+    draw(currentHexTile);
   } else {
-    draw();
+    drawHex()
   }
 }
 
@@ -1265,23 +1329,28 @@ function downOneLevel(){
 document.getElementById('downOneLevel').addEventListener('click', downOneLevel);
 
 function leaveDungeon(){
-  [right, left, _top, bottom] = last_zoom;
-  currentLevel = 0;
-  isOutside = true;
-  update()
+  if (isOutside === false) {
+    [right, left, _top, bottom] = last_zoom;
+    currentLevel = 0;
+    isOutside = true;
+    update();
+  }
 }
 document.getElementById('leaveDungeon').addEventListener('click', leaveDungeon);
 
 let last_zoom = [];
 function enterDungeon(){
-  currentLevel = 0;
-  isOutside = false;
-  last_zoom = [right, left, _top, bottom];
-  right = 0;
-  _top = 0;
-  left = 0
-  bottom = 0;
-  update()
+  if (currentHexTile.contents === "dungeon"){
+    currentLevel = 0;
+    timeInDungeon = 0;
+    isOutside = false;
+    last_zoom = [right, left, _top, bottom];
+    right = 0;
+    _top = 0;
+    left = 0
+    bottom = 0;
+    update();
+  }
 }
 document.getElementById('enterDungeon').addEventListener('click', enterDungeon);
 
