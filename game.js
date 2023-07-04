@@ -56,6 +56,8 @@ let characterHexPosition = [];
 let currentHexTile;
 
 let timeInDungeon = 0;
+let travelDays = 0;
+let status = "";
 
 function init() {
   resizeCanvas();
@@ -66,6 +68,17 @@ function init() {
   drawHex();
 }
 
+function randomStatus(){
+  let roll = Math.random() * 100;
+  if (currentHexTile && currentHexTile.type !== "city" && roll < 10){
+    status = "Monster!";
+  } else {
+    status = "No Event";
+  }
+  document.getElementById("status").innerHTML = (`
+        ${travelDays / 2} days traveled - ${status}
+      `);
+}
 
 function HexTile(x, y, type){
   this.x = x;
@@ -180,7 +193,12 @@ function HexTile(x, y, type){
   this.draw = function(){
     drawHexagon(this.x_c(), this.y_c(), type_to_color[this.type]);
     if (this.isCharacterHere){
-      currentHexTile = this;
+      if (currentHexTile !== this){
+        randomStatus();
+        travelDays++;
+        currentHexTile = this;
+      }
+
       // draw the player marker
       ctx.fillStyle = "black";
       ctx.fillRect(this.x_c() -5, this.y_c()-5, 10, 10);
@@ -271,7 +289,7 @@ function HexTile(x, y, type){
     if (this.contents === "dungeon"){
       ctx.beginPath();
       ctx.fillStyle = "black";
-      ctx.fillText("D", this.x_c(), this.y_c());
+      ctx.fillText("🏰", this.x_c(), this.y_c());
     }
   }
 
@@ -325,6 +343,7 @@ function drawHex() {
   ctx.restore();
 
   localStorage.setItem("tiles", JSON.stringify(hexTiles));
+  localStorage.setItem("travelDays", travelDays);
 }
 
 function drawHexagon(x, y, color) {
@@ -340,55 +359,8 @@ function drawHexagon(x, y, color) {
   }
 }
 
-
-function load(){
-  if (localStorage.rooms) {
-    let rooms_data = JSON.parse(localStorage.getItem("rooms"));
-    for (let i = 0; i < rooms_data.length; i++) {
-      let this_rooms_tiles = [];
-      for (let j = 0; j < rooms_data[i].tiles.length; j++) {
-        let tile_data = rooms_data[i].tiles[j];
-        let tile = new Tile(tile_data.x, tile_data.y, tile_data.z, tile_data.loc);
-        tile.real = tile_data.real;
-        tile.hash = tile_data.hash;
-        tile.isCont = tile_data.isCont;
-        tile.top = tile_data.top;
-        tile.right = tile_data.right;
-        tile.left = tile_data.left;
-        tile.bottom = tile_data.bottom;
-        tiles.add(tile.hash);
-        this_rooms_tiles.push(tile);
-      }
-      let room = new Room(
-          rooms_data[i].x,
-          rooms_data[i].y,
-          rooms_data[i].z,
-          rooms_data[i].h,
-          rooms_data[i].w,
-          rooms_data[i].entrance,
-          rooms_data[i].type,
-          this_rooms_tiles
-      );
-      room.characterIsHere = rooms_data[i].characterIsHere;
-      room.entranceTileLoc = rooms_data[i].entranceTileLoc;
-      room.flip = rooms_data[i].flip;
-
-      rooms.push(room);
-    }
-  } else {
-    let stairs = new Room(Math.floor(numTilesWide / 2) - 1, numTilesTall - 4, 0, 2, 1, "south", "stairs_up");
-    rooms.push(stairs);
-
-    let myRoom = new Room(Math.floor(numTilesWide / 2) - 2, numTilesTall - 6, 0, 5, 3, "south");
-    rooms.push(myRoom);
-  }
-}
-
 function loadHex(){
   if (localStorage.tiles){
-    // let starting_tile = new Tile(4.5,4.5,"city");
-    // starting_tile.isCharacterHere = true;
-    // starting_tile.generate_surrounding();
     let hex_tile_data = JSON.parse(localStorage.getItem("tiles"));
     for (let i=0; i<hex_tile_data.length; i++){
       let hexTile = new HexTile(hex_tile_data[i].x, hex_tile_data[i].y, hex_tile_data[i].type);
@@ -441,6 +413,11 @@ function loadHex(){
     let starting_tile = new HexTile(4.5,4.5,"city");
     starting_tile.isCharacterHere = true;
     starting_tile.generate_surrounding();
+  }
+
+  if (localStorage.getItem("travelDays")){
+    travelDays = localStorage.getItem("travelDays");
+    randomStatus();
   }
 }
 
@@ -851,9 +828,17 @@ async function generateMonster(){
       //easy, medium, difficult, deadly
       [25, 50, 75, 100],
       [50, 100, 150, 200],
-      [75, 150, 225, 400]
+      [75, 150, 225, 400],
+      [125, 250, 375, 500],
+      [250, 500, 750, 1100],
+      [300, 600, 900, 1400],
+      [350, 750, 1100, 1700],
+      [450, 900, 1400, 2100],
+      [550, 1100, 1600, 2400],
+      [600, 1200, 1900, 2800]
   ];
   let roll = Math.floor(Math.random()*100);
+  roll *= (1 + currentLevel*.5);
   let difficulty;
   if (roll < 60){
     difficulty = 0;
@@ -906,9 +891,25 @@ async function generateMonster(){
           card += (`
               <p><b>${action.name}</b></p>
               <p>${action.desc}</p>
+              <hr>
+              <form>
+              <div class="form-group">
               `);
 
         });
+        for (let i=0; i < num_monsters; i++){
+          card += (`
+
+              <label for="quantity">Monster ${i+1} HP</label>
+              <input class="form-control" type="number" id="quantity" name="quantity" value="${monster.hit_points}">
+            
+          `)
+        }
+        card += (`
+            </div>
+            </form>
+            
+        `);
 
         card += `</div>`;
         document.getElementById("monster").innerHTML = card;
@@ -1216,7 +1217,7 @@ function draw(hexTile) {
 }
 
 function reset(){
-  localStorage.removeItem("rooms");
+  localStorage.removeItem("tiles");
   location.reload();
 }
 
