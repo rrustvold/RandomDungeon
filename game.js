@@ -1357,8 +1357,14 @@ function enterDungeon(){
     update();
   }
 }
+
+function resetTravel(){
+  travelDays = 0;
+}
 document.getElementById('enterDungeon').addEventListener('click', enterDungeon);
 
 document.getElementById('monsterButton').addEventListener('click', generateMonster);
+
+
 
 init();
