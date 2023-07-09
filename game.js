@@ -852,6 +852,10 @@ async function generateMonster(){
   let xp = encounter_difficulty[level - 1][difficulty];
 
   let num_monsters = Math.ceil(Math.random() * 2);
+  let multiplier = 1;
+  if (num_monsters === 2){
+    multiplier = 1.5;
+  }
   let monster_xp = xp / num_monsters;
 
   let monster_cr = monster_xp / 200;
@@ -879,7 +883,7 @@ async function generateMonster(){
         let card = (
             `
               <div>
-                  <h3>${num_monsters} ${monster.name} ${xp} XP</h3>
+                  <h3>${num_monsters} ${monster.name} ${monster.xp * num_monsters * multiplier} XP</h3>
                   <p><b>${monster.size} ${monster.type} ${monster.alignment}</b></p>
                   <p>AC: ${monster.armor_class[0].value}, HP: ${monster.hit_points}, Speed: ${monster.speed.walk}</p>
                   <p>Str: ${monster.strength}, Dex: ${monster.dexterity}, Con: ${monster.constitution}, Int: ${monster.intelligence}, Wis: ${monster.wisdom}, Cha: ${monster.charisma}</p>
@@ -1217,7 +1221,7 @@ function draw(hexTile) {
 }
 
 function reset(){
-  localStorage.removeItem("tiles");
+  localStorage.clear();
   location.reload();
 }
 
