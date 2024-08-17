@@ -3,6 +3,7 @@
 
   <head>
     <title>Your Game Title</title>
+    <base href=".">
     <style>
       body,
       html {
@@ -39,7 +40,7 @@
                     <button type="button" class="btn btn-danger" onclick="resetTravel()">Reset Travel Counter</button>
                 </p>
                 <p>
-                     <label for="level">Character Level:</label>
+                     <label for="level">Total Character Level:</label>
                     <select name="level" id="level">
                       <option value="1">1</option>
                       <option value="2">2</option>
@@ -51,6 +52,20 @@
                       <option value="8">8</option>
                     </select>
                 </p>
+                <p>
+                  <label for="dungeonType">Dungeon Type:</label>
+                 <select name="dungeonType" id="dungeonType">
+                   <option value="general">General</option>
+                   <option value="lair">Lair</option>
+                   <option value="maze">Maze</option>
+                   <option value="mine">Mine</option>
+                   <option value="planarGate">Planar Gate</option>
+                   <option value="stronghold">Stronghold</option>
+                   <option value="temple">Temple or Shrine</option>
+                   <option value="tomb">Tomb</option>
+                   <option value="treasureVault">Treasure Vault</option>
+                 </select>
+             </p>
 
             </div>
         </div>
@@ -64,6 +79,30 @@
             </div>
 
         </div>
+
+        <div class="offcanvas offcanvas-end" id="chamber-canvas">
+          <div class="offcanvas-header">
+              <button type="button" class="btn btn-primary" id="chamberButton">Random Chamber</button>
+              <button type="button" class="btn-close text-reset"
+                      data-bs-dismiss="offcanvas"></button>
+          </div>
+          <div class="offcanvas-body" id="chamber">
+            <div>
+              <h1 id="chamberPurpose"></h1>
+              <p id="chamberState"></p>
+              <h2>Contents</h2>
+              <p id="chamberContents"> <div id="chamberTreasure"></div></p>
+              <hr>
+              <div id="chamberMonster"></div>
+              <div id="chamberHazard"></div>
+              <div id="chamberTrap"></div>
+              <div id="chamberObstacle"></div>
+              <div id="chamberTrick"></div>
+          </div>
+          </div>
+
+      </div>
+
         <div class="row">
                     <div class="col">
 
@@ -75,6 +114,10 @@
                             data-bs-toggle="offcanvas" data-bs-target="#monster-canvas">
                         Monster!
                         </button>
+                        <button class="btn btn-primary" type="button"
+                          data-bs-toggle="offcanvas" data-bs-target="#chamber-canvas">
+                        Chamber
+                        </button>  
                             <button class="btn btn-primary" type="button" id="upOneLevel">Up a level</button>
 
                             <button class="btn btn-primary" type="button" id="downOneLevel">Down a level</button>
@@ -93,6 +136,6 @@
     </div>
 
 
-    <script src="game.js?v=3" ></script>
+    <script src="game.js" ></script>
   </body>
 </html>
